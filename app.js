@@ -8,6 +8,8 @@ const port = process.env.PORT || 3000;
 
 let qrCodeImage = null; // Store the base64 QR code
 let isClientAuthenticated = false;
+const ENVIRONMENT = process.env.ENVIRONMENT || 'development';
+const ALLOWED_PHONE_NUMBERS = process.env.ALLOWED_PHONE_NUMBERS || '';
 
 // Initialize the WhatsApp client
 const client = new Client({
@@ -107,6 +109,10 @@ app.get('/send-message', async (req, res) => {
 
     // WhatsApp ID format is <number>@c.us
     const chatId = `${phoneNumber}@c.us`;
+
+    if(ENVIRONMENT === 'development' && !ALLOWED_PHONE_NUMBERS.split(',').includes(phoneNumber)) {
+        return res.status(403).json({ error: 'Phone number is not allowed' });
+    }
 
     try {
         // Send the message using the WhatsApp client
