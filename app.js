@@ -1,5 +1,7 @@
 const express = require('express');
 const { Client, LocalAuth } = require('whatsapp-web.js');
+const { exec } = require('child_process');
+
 const qrcode = require('qrcode');
 require('dotenv').config()
 
@@ -12,7 +14,7 @@ const ENVIRONMENT = process.env.ENVIRONMENT || 'development';
 const ALLOWED_PHONE_NUMBERS = process.env.ALLOWED_PHONE_NUMBERS || '';
 
 // Initialize the WhatsApp client
-const client = new Client({
+let client = new Client({
     authStrategy: new LocalAuth(),
 });
 
@@ -35,6 +37,18 @@ client.on('ready', () => {
 client.on('authenticated', () => {
     console.log('Authenticated!');
     isClientAuthenticated = true; // Set client as authenticated
+    qrCodeImage = null; // Clear QR code since client is authenticated
+})
+
+client.on('disconnected', () => {
+    console.log('Disconnected!');
+    isClientAuthenticated = false; // Set client as authenticated
+    qrCodeImage = null; // Clear QR code since client is authenticated
+})
+
+client.on('auth_failure', () => {
+    console.log('Auth Failure!');
+    isClientAuthenticated = false; // Set client as authenticated
     qrCodeImage = null; // Clear QR code since client is authenticated
 })
 
@@ -104,14 +118,14 @@ app.get('/send-message', async (req, res) => {
 
     // Validate input
     if (!phoneNumber || !message) {
-        return res.status(400).json({ error: 'Phone number and message are required' });
+        return res.status(200).json({ success: true, error: 'Phone number and message are required' });
     }
 
     // WhatsApp ID format is <number>@c.us
     const chatId = `${phoneNumber}@c.us`;
 
     if(ENVIRONMENT === 'development' && !ALLOWED_PHONE_NUMBERS.split(',').includes(phoneNumber)) {
-        return res.status(403).json({ error: 'Phone number is not allowed' });
+        return res.status(200).json({ success: true, error: 'Phone number is not allowed' });
     }
 
     try {
@@ -120,9 +134,27 @@ app.get('/send-message', async (req, res) => {
         res.status(200).json({ success: true, message: 'Message sent successfully' });
     } catch (error) {
         console.error('Error sending message:', error);
-        res.status(500).json({ success: false, error: 'Failed to send message' });
+        res.status(200).json({ success: false, error: 'Failed to send message' });
     }
 });
+
+app.get('/disconnect', async (req, res) => {
+    await client.logout();
+    await client.destroy();
+    
+    res.status(200).json({ success: true, message: 'Client disconnected successfully' });
+
+    exec('rm -rf .wwebjs_*', (err, stdout, stderr) => {
+        if (err) {
+            console.error('Error during cleanup:', stderr);
+        } else {
+            console.log('Cleanup completed:', stdout);
+        }
+
+        process.exit(1);
+    });
+    process.exit(0);
+})
 
 // Start the Express server
 app.listen(port, () => {
