@@ -6,6 +6,9 @@ const qrcode = require('qrcode');
 require('dotenv').config()
 
 const app = express();
+
+app.use(cors())
+
 const port = process.env.PORT || 3000;
 
 let qrCodeImage = null; // Store the base64 QR code
@@ -141,7 +144,7 @@ app.get('/send-message', async (req, res) => {
 app.get('/disconnect', async (req, res) => {
     await client.logout();
     await client.destroy();
-    
+
     res.status(200).json({ success: true, message: 'Client disconnected successfully' });
 
     exec('rm -rf .wwebjs_*', (err, stdout, stderr) => {
