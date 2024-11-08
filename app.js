@@ -1,7 +1,7 @@
 const express = require('express');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const { exec } = require('child_process');
-
+const cors = require('cors')
 const qrcode = require('qrcode');
 require('dotenv').config()
 
