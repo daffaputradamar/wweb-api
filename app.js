@@ -65,6 +65,37 @@ client.on('message_create', message => {
 // Initialize the WhatsApp client
 client.initialize();
 
+let isProcessing = false;
+
+const processQueue = async () => {
+    if (isProcessing || messageQueue.length === 0) {
+        return; // Either already processing or no messages to process
+    }
+
+    isProcessing = true; // Mark as processing
+
+    while (messageQueue.length > 0) {
+        const { chatId, message, resolve, reject } = messageQueue.shift(); // Get the next message
+        const delay = Math.floor(Math.random() * 10) + 1; // Random delay between 1-10 seconds
+
+        console.log(`Processing message to ${chatId} with a ${delay} second delay...`);
+
+        await new Promise((r) => setTimeout(r, delay * 1000)); // Apply delay
+
+        try {
+            await client.sendMessage(chatId, message); // Send the message
+            console.log(`Message sent to ${chatId}`);
+            resolve({ success: true, message: 'Message sent successfully' });
+        } catch (error) {
+            console.error(`Failed to send message to ${chatId}:`, error);
+            reject({ success: false, error: 'Failed to send message' });
+        }
+    }
+
+    isProcessing = false; // Mark as not processing when done
+};
+
+
 app.get('/', (req, res) => {
     res.send(`
         <html>
@@ -116,30 +147,36 @@ app.get('/qr', (req, res) => {
 });
 
 // Endpoint to send a WhatsApp message
-app.get('/send-message', async (req, res) => {
+app.get('/send-message', (req, res) => {
     const { phoneNumber, message } = req.query;
 
     // Validate input
     if (!phoneNumber || !message) {
-        return res.status(200).json({ success: true, error: 'Phone number and message are required' });
+        return res.status(400).json({ success: false, error: 'Phone number and message are required' });
     }
 
-    // WhatsApp ID format is <number>@c.us
     const chatId = `${phoneNumber}@c.us`;
 
-    if(ENVIRONMENT === 'development' && !ALLOWED_PHONE_NUMBERS.split(',').includes(phoneNumber)) {
-        return res.status(200).json({ success: true, error: 'Phone number is not allowed' });
+    if (ENVIRONMENT === 'development' && !ALLOWED_PHONE_NUMBERS.split(',').includes(phoneNumber)) {
+        return res.status(403).json({ success: false, error: 'Phone number is not allowed' });
     }
 
-    try {
-        // Send the message using the WhatsApp client
-        await client.sendMessage(chatId, message);
-        res.status(200).json({ success: true, message: 'Message sent successfully' });
-    } catch (error) {
-        console.error('Error sending message:', error);
-        res.status(200).json({ success: false, error: 'Failed to send message' });
+    // Enqueue message
+    const messagePromise = new Promise((resolve, reject) => {
+        messageQueue.push({ chatId, message, resolve, reject });
+    });
+
+    // Start the processor if not already running
+    if (!isProcessing) {
+        processQueue();
     }
+
+    // Respond immediately to the client
+    messagePromise
+        .then((result) => res.status(200).json(result))
+        .catch((error) => res.status(500).json(error));
 });
+
 
 app.get('/disconnect', async (req, res) => {
     await client.logout();
