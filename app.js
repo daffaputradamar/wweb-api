@@ -65,6 +65,7 @@ client.on('message_create', message => {
 // Initialize the WhatsApp client
 client.initialize();
 
+let messageQueue = [];
 let isProcessing = false;
 
 const processQueue = async () => {
